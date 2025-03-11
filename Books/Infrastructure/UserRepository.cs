@@ -2,6 +2,9 @@
 using Books.Domain.Interfaces;
 using Books.Domain.Models;
 using Books.Domain.ModelsDb;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure.Internal;
 
 namespace Books.Infrastructure
 {
@@ -9,37 +12,52 @@ namespace Books.Infrastructure
     {
         private readonly AppDbContext _context;
         private readonly IMapper _mapper;
-        public UserRepository(AppDbContext context,IMapper mapper)
+        private readonly IPasswordHasher<UserDb> _passwordHasher;
+        public UserRepository(AppDbContext context,IMapper mapper,IPasswordHasher<UserDb> passwordHasher)
         {
             _context = context;
             _mapper = mapper;
+            _passwordHasher = passwordHasher;
         }
-        public async Task<User> CreateAsync(User user)
+        public async Task<User> CreateAsync(string name,string email, string password)
         {
-            var addUser = await _context.AddAsync(_mapper.Map<UserDb>(user));
-            return _mapper.Map<User>(addUser);
+            var user = new UserDb() { Email = email, Name = name, Id = new Guid()};
+            user.PasswordHash = _passwordHasher.HashPassword(user, password);
+            await _context.users.AddAsync(user);
+            await _context.SaveChangesAsync();
+            return _mapper.Map<User>(user);
             
             
         }
 
-        public Task DeleteAsync(Guid id)
+        public async Task DeleteAsync(Guid id)
         {
-            throw new NotImplementedException();
+            var user = await _context.users.FindAsync(id);
+            _context.Remove(user);
+            await _context.SaveChangesAsync();
         }
 
-        public Task<IEnumerable<User>> GetAllAsync()
+        public async Task<IEnumerable<User>> GetAllAsync()
         {
-            throw new NotImplementedException();
+            var users = await _context.users.ToListAsync();
+            return users.Select(i=>_mapper.Map<User>(i));
         }
 
-        public Task<User> GetByIdAsync(Guid id)
+        public async Task<User> GetByIdAsync(Guid id)
         {
-            throw new NotImplementedException();
+            var user = await _context.users.FindAsync(id);
+            return _mapper.Map<User>(user);
         }
 
-        public Task UpdateAsync(string name, string Email, string password)
+        public async Task UpdateAsync(Guid id,string name, string Email, string password)
         {
-            throw new NotImplementedException();
+            var user = await _context.users.FirstOrDefaultAsync(u => u.Id == id);
+            user.Name = name;
+            user.Email = Email;
+            user.PasswordHash =_passwordHasher.HashPassword(user, password);
+            await _context.SaveChangesAsync();
+
+
         }
     }
 }
